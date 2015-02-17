@@ -99,7 +99,7 @@ sub main {
             my $last_build_result = $lb_data->{result};
             if ($dur_sec >= $thresh_crit && $thresh_crit) {
                 if ($last_build_result eq "UNSTABLE" && $unstable_as_successful && $last_build_dur_sec < $thresh_crit) {
-                    response("OK", "'$jobname' unstable, but successful for $dur_human. " . $lb_data->{url} ); 
+                    response("OK", "'$jobname' unstable, but allowed to pass for $last_build_dur_human. " . $lb_data->{url} ); 
                 } else {
                     response("CRITICAL", "'$jobname' has not run successfully for $dur_human. " . ($ls_not_lb ? "Runs since failed. " : "No runs since. ") . $lb_data->{url} );
                 }
