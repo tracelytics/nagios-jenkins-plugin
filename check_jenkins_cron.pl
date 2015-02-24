@@ -87,7 +87,7 @@ sub main {
     my ($lb_status, $lb_resp, $lb_data) = apireq('lastBuild', $timeout);
     my ($ls_status, $ls_resp, $ls_data) = apireq('lastStableBuild', $timeout);
     my $ls_not_lb = 0;
-    
+
     if ($ls_status || $lb_status) {
 		# At least one of the API calls succeeded
         $ls_not_lb = 1 if ($ls_data->{number} != $lb_data->{number});
@@ -98,7 +98,9 @@ sub main {
             my ($last_build_dur_sec, $last_build_dur_human) = calcdur(int($lb_data->{timestamp} / 1000));
             my $last_build_result = $lb_data->{result};
             if ($dur_sec >= $thresh_crit && $thresh_crit) {
-                if ($last_build_result eq "UNSTABLE" && $unstable_as_successful && $last_build_dur_sec < $thresh_crit) {
+                if (!defined($last_build_result) && $lb_data->{duration} == 0) {
+                    response("OK", "'$jobname' currently running. " . $lb_data->{url} ); 
+                } elsif ($last_build_result eq "UNSTABLE" && $unstable_as_successful && $last_build_dur_sec < $thresh_crit) {
                     response("OK", "'$jobname' unstable, but allowed to pass for $last_build_dur_human. " . $lb_data->{url} ); 
                 } else {
                     response("CRITICAL", "'$jobname' has not run successfully for $dur_human. " . ($ls_not_lb ? "Runs since failed. " : "No runs since. ") . $lb_data->{url} );
