@@ -28,6 +28,7 @@ my $thresh_crit;
 my $alert_on_fail;
 my $alert_on_lastx_fail;
 my $alert_on_nostart;
+my $unstable_as_successful;
 my $debug = 0;
 my $timeout = 0;
 
@@ -43,9 +44,10 @@ sub main {
     # a: Alert if last X builds were failed
     # t: timeout in seconds (optional)
     # s: Alert on situation when was never started
+    # y: treat unstable as successful (optional)
     # v: verbosity / debug (optional)
     my %opts;
-    getopts('j:l:u:p:w:c:a:t:s:fv', \%opts);
+    getopts('j:l:u:p:w:c:a:t:s:fvy', \%opts);
 
     if (!$opts{j} || !$opts{l}) {
         print STDERR "Missing option(s)\n\n";
@@ -69,6 +71,7 @@ sub main {
     $thresh_crit = int($opts{c});
     $alert_on_nostart = $opts{s};
     $alert_on_fail = $opts{f};
+    $unstable_as_successful = $opts{y};
     if ($opts{'a'}) {
         $alert_on_lastx_fail=int($opts{a});
         if ($alert_on_lastx_fail == 1) {
@@ -84,7 +87,7 @@ sub main {
     my ($lb_status, $lb_resp, $lb_data) = apireq('lastBuild', $timeout);
     my ($ls_status, $ls_resp, $ls_data) = apireq('lastStableBuild', $timeout);
     my $ls_not_lb = 0;
-    
+
     if ($ls_status || $lb_status) {
 		# At least one of the API calls succeeded
         $ls_not_lb = 1 if ($ls_data->{number} != $lb_data->{number});
@@ -92,8 +95,16 @@ sub main {
         my $dur_human;
         if ($ls_status) {
             ($dur_sec, $dur_human) = calcdur(int($ls_data->{timestamp} / 1000));
+            my ($last_build_dur_sec, $last_build_dur_human) = calcdur(int($lb_data->{timestamp} / 1000));
+            my $last_build_result = $lb_data->{result};
             if ($dur_sec >= $thresh_crit && $thresh_crit) {
-                response("CRITICAL", "'$jobname' has not run successfully for $dur_human. " . ($ls_not_lb ? "Runs since failed. " : "No runs since. ") . $lb_data->{url} );
+                if (!defined($last_build_result) && $lb_data->{duration} == 0) {
+                    response("OK", "'$jobname' currently running. " . $lb_data->{url} ); 
+                } elsif ($last_build_result eq "UNSTABLE" && $unstable_as_successful && $last_build_dur_sec < $thresh_crit) {
+                    response("OK", "'$jobname' unstable, but allowed to pass for $last_build_dur_human. " . $lb_data->{url} ); 
+                } else {
+                    response("CRITICAL", "'$jobname' has not run successfully for $dur_human. " . ($ls_not_lb ? "Runs since failed. " : "No runs since. ") . $lb_data->{url} );
+                }
             } elsif ($dur_sec >= $thresh_warn && $thresh_warn && $ls_not_lb) {
                 response("CRITICAL", "'$jobname' has not run successfully for $dur_human. Runs since failed. " . $lb_data->{url});
             } elsif ($dur_sec >= $thresh_warn && $thresh_warn) {
